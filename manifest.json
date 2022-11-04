@@ -1,0 +1,10 @@
+{
+  "name": "PlanBuildLocations",
+  "description": "Use PlanBuild blueprints as automatically placed locations in your Valheim worlds.",
+  "version_number": "0.0.1",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.1901",
+    "ValheimModding-Jotunn-2.7.7"
+  ],
+  "website_url": "https://github.com/sirskunkalot/PlanBuildLocations"
+}
