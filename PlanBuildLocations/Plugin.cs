@@ -13,12 +13,14 @@ using System.IO;
 using System;
 using System.Linq;
 using HarmonyLib;
+using Jotunn.Utils;
+using Paths = BepInEx.Paths;
 
 namespace PlanBuildLocations
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency(Jotunn.Main.ModGuid)]
-    //[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     internal class Plugin : BaseUnityPlugin
     {
         public const string PluginGUID = "marcopogo.PlanBuildLocations";
@@ -67,7 +69,7 @@ namespace PlanBuildLocations
                 // Load locations per world on a server
                 if (ZNet.instance.IsServer())
                 {
-                    Jotunn.Logger.LogWarning($"Loading location blueprints for world {ZNet.m_world.m_name}");
+                    Jotunn.Logger.LogInfo($"Loading location blueprints for world {ZNet.m_world.m_name}");
 
                     string worldLocationsDirectory = $"{PlanBuildLocations.Config.LocationDirectoryConfig.Value}/{ZNet.m_world.m_name}";
 
@@ -82,7 +84,7 @@ namespace PlanBuildLocations
                 // Load all locations on a client
                 else
                 {
-                    Jotunn.Logger.LogWarning("Loading location blueprints in client mode");
+                    Jotunn.Logger.LogInfo("Loading location blueprints in client mode");
 
                     blueprintFiles.AddRange(Directory.EnumerateFiles(PlanBuildLocations.Config.LocationDirectoryConfig.Value, "*.bplocation", SearchOption.AllDirectories));
                     blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
@@ -128,7 +130,7 @@ namespace PlanBuildLocations
 
         private void RemoveCustomLocations()
         {
-            Jotunn.Logger.LogWarning("Removing location blueprints");
+            Jotunn.Logger.LogInfo("Removing location blueprints");
 
             foreach (var location in LocationBlueprints)
             {
