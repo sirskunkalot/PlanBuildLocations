@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.IO;
 using System;
 using System.Linq;
+using HarmonyLib;
 
 namespace PlanBuildLocations
 {
@@ -25,6 +26,8 @@ namespace PlanBuildLocations
         public const string PluginVersion = "0.0.1";
 
         public static Plugin Instance;
+        
+        private Harmony Harmony;
 
         private Dictionary<string, BlueprintLocation> LocationBlueprints;
 
@@ -35,61 +38,103 @@ namespace PlanBuildLocations
             // Init config
             PlanBuildLocations.Config.Init();
 
-            // Load locations on Jötunn event
+            // Load locations in Jötunn on every ZoneManager.Awake
             LocationBlueprints = new Dictionary<string, BlueprintLocation>();
-            ZoneManager.OnVanillaLocationsAvailable += ZoneManager_OnVanillaLocationsAvailable;
+            ZoneManager.OnVanillaLocationsAvailable += AddCustomLocations;
+
+            // Harmony patch to unload all locations from Jötunn on ZNetScene.Shutdown
+            Harmony = new Harmony(PluginGUID);
+            Harmony.PatchAll(typeof(Patches));
         }
 
-        private void ZoneManager_OnVanillaLocationsAvailable()
+        private static class Patches
         {
-            Jotunn.Logger.LogInfo("Loading location blueprints");
-            
-            if (!Directory.Exists(PlanBuildLocations.Config.LocationDirectoryConfig.Value))
-            {
-                Directory.CreateDirectory(PlanBuildLocations.Config.LocationDirectoryConfig.Value);
-            }
+            [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Shutdown)), HarmonyPostfix]
+            private static void ZNetScene_Shutdown() => Instance.RemoveCustomLocations();
+        }
 
-            string worldLocationsDirectory = $"{PlanBuildLocations.Config.LocationDirectoryConfig.Value}/{ZNet.m_world.m_name}";
-
-            if (!Directory.Exists(worldLocationsDirectory))
+        private void AddCustomLocations()
+        {
+            try
             {
-                return;
-            }
-            
-            List<string> blueprintFiles = new List<string>();
-            blueprintFiles.AddRange(Directory.EnumerateFiles(worldLocationsDirectory, "*.bplocation"));
-            blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(BepInEx.Paths.BepInExRootPath, null)).ToList();
-
-            // Try to load all saved blueprint locations
-            foreach (var relativeFilePath in blueprintFiles)
-            {
-                try
+                if (!Directory.Exists(PlanBuildLocations.Config.LocationDirectoryConfig.Value))
                 {
-                    BlueprintLocation bp = BlueprintLocation.FromFile(relativeFilePath);
-                    if (LocationBlueprints.ContainsKey(bp.ID))
+                    Directory.CreateDirectory(PlanBuildLocations.Config.LocationDirectoryConfig.Value);
+                }
+                
+                List<string> blueprintFiles = new List<string>();
+
+                // Load locations per world on a server
+                if (ZNet.instance.IsServer())
+                {
+                    Jotunn.Logger.LogWarning($"Loading location blueprints for world {ZNet.m_world.m_name}");
+
+                    string worldLocationsDirectory = $"{PlanBuildLocations.Config.LocationDirectoryConfig.Value}/{ZNet.m_world.m_name}";
+
+                    if (!Directory.Exists(worldLocationsDirectory))
                     {
-                        throw new Exception($"Blueprint location ID {bp.ID} already exists");
+                        return;
                     }
-                    LocationBlueprints.Add(bp.ID, bp);
+            
+                    blueprintFiles.AddRange(Directory.EnumerateFiles(worldLocationsDirectory, "*.bplocation"));
+                    blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
                 }
-                catch (Exception ex)
+                // Load all locations on a client
+                else
                 {
-                    Logger.LogWarning($"Could not load blueprint {relativeFilePath}: {ex}");
-                }
-            }
+                    Jotunn.Logger.LogWarning("Loading location blueprints in client mode");
 
-            // Create blueprint locations
-            foreach (var bp in LocationBlueprints.Values)
-            {
-                var prefab = bp.CreateLocation();
-                var config = new LocationConfig
+                    blueprintFiles.AddRange(Directory.EnumerateFiles(PlanBuildLocations.Config.LocationDirectoryConfig.Value, "*.bplocation", SearchOption.AllDirectories));
+                    blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
+                }
+
+                // Try to load blueprint locations
+                foreach (var relativeFilePath in blueprintFiles)
                 {
-                    Biome = Heightmap.Biome.Meadows,
-                    Quantity = 100
-                };
-                var location = new CustomLocation(prefab, false, config);
-                ZoneManager.Instance.AddCustomLocation(location);
+                    try
+                    {
+                        BlueprintLocation bp = BlueprintLocation.FromFile(relativeFilePath);
+                        bp.ID = $"bplocation:{bp.ID}";
+                        if (LocationBlueprints.ContainsKey(bp.ID))
+                        {
+                            throw new Exception($"Blueprint location ID {bp.ID} already exists");
+                        }
+                        LocationBlueprints.Add(bp.ID, bp);
+                    }
+                    catch (Exception ex)
+                    {
+                        Jotunn.Logger.LogWarning($"Could not load blueprint location {relativeFilePath}: {ex}");
+                    }
+                }
+
+                // Create blueprint locations
+                foreach (var bp in LocationBlueprints.Values)
+                {
+                    var prefab = bp.CreateLocation();
+                    var config = new LocationConfig
+                    {
+                        Biome = Heightmap.Biome.Meadows,
+                        Quantity = 100
+                    };
+                    var location = new CustomLocation(prefab, false, config);
+                    ZoneManager.Instance.AddCustomLocation(location);
+                }
             }
+            catch (Exception ex)
+            {
+                Jotunn.Logger.LogWarning($"Exception caught while adding custom locations: {ex}");
+            }
+        }
+
+        private void RemoveCustomLocations()
+        {
+            Jotunn.Logger.LogWarning("Removing location blueprints");
+
+            foreach (var location in LocationBlueprints)
+            {
+                ZoneManager.Instance.DestroyCustomLocation(location.Key);
+            }
+            LocationBlueprints.Clear();
         }
     }
 }

@@ -261,7 +261,7 @@ namespace PlanBuildLocations
             Logger.LogDebug($"Creating location of blueprint {ID}");
 
             // Create location container
-            var location = ZoneManager.Instance.CreateLocationContainer($"pblocation:{ID}");
+            var location = ZoneManager.Instance.CreateLocationContainer(ID);
 
             // Create location pieces
             try
