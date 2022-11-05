@@ -3,9 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Jotunn.Configs;
 using UnityEngine;
 using Logger = Jotunn.Logger;
 using Object = UnityEngine.Object;
+using System.Globalization;
 
 namespace PlanBuildLocations
 {
@@ -15,6 +17,7 @@ namespace PlanBuildLocations
         private const string HeaderCreator = "#Creator:";
         private const string HeaderDescription = "#Description:";
         private const string HeaderPieces = "#Pieces";
+        private const string HeaderLocation = "#Location";
 
         public enum Format
         {
@@ -51,6 +54,11 @@ namespace PlanBuildLocations
         ///     Array of the <see cref="PieceEntry"/>s this blueprint is made of
         /// </summary>
         public PieceEntry[] PieceEntries;
+
+        /// <summary>
+        ///     Location configuration used by Jötunn
+        /// </summary>
+        public LocationConfig LocationConfig;
         
         /// <summary>
         ///     Create a blueprint instance from a file in the filesystem. Reads VBuild and Blueprint files.
@@ -131,6 +139,7 @@ namespace PlanBuildLocations
             ret.ID = id;
 
             List<PieceEntry> pieceEntries = new List<PieceEntry>();
+            ret.LocationConfig = new LocationConfig();
 
             ParserState state = ParserState.Pieces;
 
@@ -164,6 +173,11 @@ namespace PlanBuildLocations
                     state = ParserState.Pieces;
                     continue;
                 }
+                if (line == HeaderLocation)
+                {
+                    state = ParserState.Location;
+                    continue;
+                }
                 if (line.StartsWith("#"))
                 {
                     continue;
@@ -175,6 +189,80 @@ namespace PlanBuildLocations
                         {
                             case Format.BlueprintLocation:
                                 pieceEntries.Add(PieceEntry.FromBlueprint(line));
+                                break;
+                        }
+                        continue;
+                    case ParserState.Location:
+                        var split = line.Split(':');
+                        var param = split[0].Trim().ToLowerInvariant();
+                        var value = split[1].Trim();
+                        switch (param)
+                        {
+                            case "biome":
+                                ret.LocationConfig.Biome = (Heightmap.Biome)Enum.Parse(typeof(Heightmap.Biome), value);
+                                break;
+                            case "prioritized":
+                                ret.LocationConfig.Priotized = bool.Parse(value);
+                                break;
+                            case "quantity":
+                                ret.LocationConfig.Quantity = int.Parse(value);
+                                break;
+                            case "exteriorradius":
+                                ret.LocationConfig.ExteriorRadius = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "centerfirst":
+                                ret.LocationConfig.CenterFirst = bool.Parse(value);
+                                break;
+                            case "inforest":
+                                ret.LocationConfig.InForest = bool.Parse(value);
+                                break;
+                            case "forestthresholdmin":
+                                ret.LocationConfig.ForestTresholdMin = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "forestthresholdmax":
+                                ret.LocationConfig.ForestTrasholdMax = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "unique":
+                                ret.LocationConfig.Unique = bool.Parse(value);
+                                break;
+                            case "minaltitude":
+                                ret.LocationConfig.MinAltitude = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "maxaltitude":
+                                ret.LocationConfig.MaxAltitude = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "maxdistance":
+                                ret.LocationConfig.MaxDistance = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "mindistance":
+                                ret.LocationConfig.MinDistance = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "group":
+                                ret.LocationConfig.Group = value;
+                                break;
+                            case "mindistancefromsimilar":
+                                ret.LocationConfig.MinDistanceFromSimilar = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "minterraindelta":
+                                ret.LocationConfig.MinTerrainDelta = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "maxterraindelta":
+                                ret.LocationConfig.MaxTerrainDelta = float.Parse(value, NumberStyles.Any, NumberFormatInfo.InvariantInfo);
+                                break;
+                            case "sloperotation":
+                                ret.LocationConfig.SlopeRotation = bool.Parse(value);
+                                break;
+                            case "randomrotation":
+                                ret.LocationConfig.RandomRotation = bool.Parse(value);
+                                break;
+                            case "snaptowater":
+                                ret.LocationConfig.SnapToWater = bool.Parse(value);
+                                break;
+                            case "cleararea":
+                                ret.LocationConfig.ClearArea = bool.Parse(value);
+                                break;
+                            default:
+                                Logger.LogDebug($"Invalid location config {param}");
                                 break;
                         }
                         continue;
@@ -192,7 +280,7 @@ namespace PlanBuildLocations
         }
 
         /// <summary>
-        ///     Creates a string array of this blueprint instance in format <see cref="Format.Blueprint"/>.
+        ///     Creates a string array of this blueprint instance in format <see cref="Format.BlueprintLocation"/>.
         /// </summary>
         /// <returns>A string array representation of this blueprint without the thumbnail</returns>
         public string[] ToArray()
@@ -217,7 +305,7 @@ namespace PlanBuildLocations
         }
 
         /// <summary>
-        ///     Creates a compressed BLOB of this blueprint instance as <see cref="Format.Blueprint"/>.
+        ///     Creates a compressed BLOB of this blueprint instance as <see cref="Format.BlueprintLocation"/>.
         /// </summary>
         /// <returns>A byte array representation of this blueprint including the thumbnail</returns>
         public byte[] ToBlob()

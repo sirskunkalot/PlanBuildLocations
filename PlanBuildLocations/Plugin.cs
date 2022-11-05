@@ -5,15 +5,14 @@
 // Project: PlanBuildLocations
 
 using BepInEx;
-using Jotunn.Configs;
+using HarmonyLib;
 using Jotunn.Entities;
 using Jotunn.Managers;
+using Jotunn.Utils;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System;
 using System.Linq;
-using HarmonyLib;
-using Jotunn.Utils;
 using Paths = BepInEx.Paths;
 
 namespace PlanBuildLocations
@@ -28,7 +27,7 @@ namespace PlanBuildLocations
         public const string PluginVersion = "0.0.1";
 
         public static Plugin Instance;
-        
+
         private Harmony Harmony;
 
         private Dictionary<string, BlueprintLocation> LocationBlueprints;
@@ -63,7 +62,7 @@ namespace PlanBuildLocations
                 {
                     Directory.CreateDirectory(PlanBuildLocations.Config.LocationDirectoryConfig.Value);
                 }
-                
+
                 List<string> blueprintFiles = new List<string>();
 
                 // Load locations per world on a server
@@ -77,7 +76,7 @@ namespace PlanBuildLocations
                     {
                         return;
                     }
-            
+
                     blueprintFiles.AddRange(Directory.EnumerateFiles(worldLocationsDirectory, "*.bplocation"));
                     blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
                 }
@@ -95,6 +94,8 @@ namespace PlanBuildLocations
                 {
                     try
                     {
+                        Jotunn.Logger.LogDebug($"Loading blueprint location {relativeFilePath}");
+
                         BlueprintLocation bp = BlueprintLocation.FromFile(relativeFilePath);
                         bp.ID = $"bplocation:{bp.ID}";
                         if (LocationBlueprints.ContainsKey(bp.ID))
@@ -113,11 +114,7 @@ namespace PlanBuildLocations
                 foreach (var bp in LocationBlueprints.Values)
                 {
                     var prefab = bp.CreateLocation();
-                    var config = new LocationConfig
-                    {
-                        Biome = Heightmap.Biome.Meadows,
-                        Quantity = 100
-                    };
+                    var config = bp.LocationConfig;
                     var location = new CustomLocation(prefab, false, config);
                     ZoneManager.Instance.AddCustomLocation(location);
                 }
