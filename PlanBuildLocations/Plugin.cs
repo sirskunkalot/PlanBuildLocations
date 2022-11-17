@@ -10,6 +10,7 @@ using Jotunn.Entities;
 using Jotunn.Managers;
 using Jotunn.Utils;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,7 +31,8 @@ namespace PlanBuildLocations
 
         private Harmony Harmony;
 
-        private Dictionary<string, BlueprintLocation> LocationBlueprints;
+        private Dictionary<string, BlueprintLocation> LocationBlueprints = new Dictionary<string, BlueprintLocation>();
+        private static CustomRPC LocationsRPC;
 
         private void Awake()
         {
@@ -39,9 +41,22 @@ namespace PlanBuildLocations
             // Init config
             PlanBuildLocations.Config.Init();
 
-            // Load locations in Jötunn on every ZoneManager.Awake
-            LocationBlueprints = new Dictionary<string, BlueprintLocation>();
-            ZoneManager.OnVanillaLocationsAvailable += AddCustomLocations;
+            // Load server locations in Jötunn on every ZoneManager.Awake
+            ZoneManager.OnVanillaLocationsAvailable += LoadServerLocations;
+
+            // Get locations via RPC from the server on a client
+            SynchronizationManager.OnConfigurationSynchronized += (obj, attr) =>
+            {
+                if (attr.InitialSynchronization)
+                {
+                    Jotunn.Logger.LogInfo("Loading location blueprints in client mode");
+                    LocationsRPC.Initiate();
+                }
+            };
+
+            // Prepare RPC for server/client locations
+            LocationsRPC = NetworkManager.Instance.AddRPC(
+                "bplocations", LocationsRPC_OnServerReceive, LocationsRPC_OnClientReceive);
 
             // Harmony patch to unload all locations from Jötunn on ZNetScene.Shutdown
             Harmony = new Harmony(PluginGUID);
@@ -54,7 +69,7 @@ namespace PlanBuildLocations
             private static void ZNetScene_Shutdown() => Instance.RemoveCustomLocations();
         }
 
-        private void AddCustomLocations()
+        private void LoadServerLocations()
         {
             try
             {
@@ -65,7 +80,7 @@ namespace PlanBuildLocations
 
                 List<string> blueprintFiles = new List<string>();
 
-                // Load locations per world on a server
+                // Load locations via filesystem per world on a server
                 if (ZNet.instance.IsServer())
                 {
                     Jotunn.Logger.LogInfo($"Loading location blueprints for world {ZNet.m_world.m_name}");
@@ -79,50 +94,90 @@ namespace PlanBuildLocations
 
                     blueprintFiles.AddRange(Directory.EnumerateFiles(worldLocationsDirectory, "*.bplocation"));
                     blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
-                }
-                // Load all locations on a client
-                else
-                {
-                    Jotunn.Logger.LogInfo("Loading location blueprints in client mode");
 
-                    blueprintFiles.AddRange(Directory.EnumerateFiles(PlanBuildLocations.Config.LocationDirectoryConfig.Value, "*.bplocation", SearchOption.AllDirectories));
-                    blueprintFiles = blueprintFiles.Select(absolute => absolute.Replace(Paths.BepInExRootPath, null)).ToList();
-                }
-
-                // Try to load blueprint locations
-                foreach (var relativeFilePath in blueprintFiles)
-                {
-                    try
+                    // Try to load blueprint locations
+                    foreach (var relativeFilePath in blueprintFiles)
                     {
-                        Jotunn.Logger.LogDebug($"Loading blueprint location {relativeFilePath}");
-
-                        BlueprintLocation bp = BlueprintLocation.FromFile(relativeFilePath);
-                        bp.ID = $"bplocation:{bp.ID}";
-                        if (LocationBlueprints.ContainsKey(bp.ID))
+                        try
                         {
-                            throw new Exception($"Blueprint location ID {bp.ID} already exists");
+                            Jotunn.Logger.LogDebug($"Loading blueprint location {relativeFilePath}");
+
+                            BlueprintLocation bp = BlueprintLocation.FromFile(relativeFilePath);
+                            bp.ID = $"bplocation:{bp.ID}";
+                            if (LocationBlueprints.ContainsKey(bp.ID))
+                            {
+                                throw new Exception($"Blueprint location ID {bp.ID} already exists");
+                            }
+                            LocationBlueprints.Add(bp.ID, bp);
                         }
-                        LocationBlueprints.Add(bp.ID, bp);
+                        catch (Exception ex)
+                        {
+                            Jotunn.Logger.LogWarning($"Could not load blueprint location {relativeFilePath}: {ex}");
+                        }
                     }
-                    catch (Exception ex)
+
+                    // Create blueprint locations
+                    foreach (var bp in LocationBlueprints.Values)
                     {
-                        Jotunn.Logger.LogWarning($"Could not load blueprint location {relativeFilePath}: {ex}");
+                        var prefab = bp.CreateLocation();
+                        var config = bp.LocationConfig;
+                        var location = new CustomLocation(prefab, false, config);
+                        ZoneManager.Instance.AddCustomLocation(location);
                     }
                 }
 
-                // Create blueprint locations
-                foreach (var bp in LocationBlueprints.Values)
-                {
-                    var prefab = bp.CreateLocation();
-                    var config = bp.LocationConfig;
-                    var location = new CustomLocation(prefab, false, config);
-                    ZoneManager.Instance.AddCustomLocation(location);
-                }
             }
             catch (Exception ex)
             {
                 Jotunn.Logger.LogWarning($"Exception caught while adding custom locations: {ex}");
             }
+        }
+        private IEnumerator LocationsRPC_OnServerReceive(long sender, ZPackage package)
+        {
+            Jotunn.Logger.LogDebug($"Sending blueprint locations to {sender}");
+
+            ZPackage newPackage = new ZPackage();
+
+            newPackage.Write(LocationBlueprints.Count);
+            Jotunn.Logger.LogDebug($"Sending {LocationBlueprints.Count} locations");
+            foreach (var entry in LocationBlueprints)
+            {
+                Jotunn.Logger.LogDebug($"{entry.Key}");
+                newPackage.Write(entry.Value.ToZPackage());
+            }
+
+            LocationsRPC.SendPackage(sender, newPackage);
+            yield break;
+        }
+
+        private IEnumerator LocationsRPC_OnClientReceive(long sender, ZPackage package)
+        {
+            Jotunn.Logger.LogMessage($"Received blueprint locations");
+
+            LocationBlueprints.Clear();
+
+            // Deserialize package
+            var numBlueprints = package.ReadInt();
+            while (numBlueprints > 0)
+            {
+                BlueprintLocation bp = BlueprintLocation.FromZPackage(package.ReadPackage());
+                LocationBlueprints.Add(bp.ID, bp);
+                numBlueprints--;
+
+                Jotunn.Logger.LogDebug(bp.ID);
+            }
+
+            // Create blueprint locations
+            foreach (var bp in LocationBlueprints.Values)
+            {
+                var prefab = bp.CreateLocation();
+                var config = bp.LocationConfig;
+                var location = new CustomLocation(prefab, false, config);
+                ZoneManager.Instance.AddCustomLocation(location);
+                ZoneManager.Instance.RegisterLocationInZoneSystem(location.ZoneLocation);
+            }
+
+            yield break;
         }
 
         private void RemoveCustomLocations()
