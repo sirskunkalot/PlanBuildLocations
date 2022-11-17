@@ -49,7 +49,7 @@ namespace PlanBuildLocations
             {
                 if (attr.InitialSynchronization)
                 {
-                    Jotunn.Logger.LogInfo("Loading location blueprints in client mode");
+                    Jotunn.Logger.LogInfo("Requesting location blueprints from the server");
                     LocationsRPC.Initiate();
                 }
             };
@@ -134,12 +134,11 @@ namespace PlanBuildLocations
         }
         private IEnumerator LocationsRPC_OnServerReceive(long sender, ZPackage package)
         {
-            Jotunn.Logger.LogDebug($"Sending blueprint locations to {sender}");
+            Jotunn.Logger.LogDebug($"Sending {LocationBlueprints.Count} blueprint locations to peer #{sender}");
 
             ZPackage newPackage = new ZPackage();
 
             newPackage.Write(LocationBlueprints.Count);
-            Jotunn.Logger.LogDebug($"Sending {LocationBlueprints.Count} locations");
             foreach (var entry in LocationBlueprints)
             {
                 Jotunn.Logger.LogDebug($"{entry.Key}");
