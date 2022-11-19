@@ -88,6 +88,8 @@
     <Compile Include="Properties\IgnoreAccessModifiers.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SnapPointEntry.cs" />
+    <Compile Include="TerrainModEntry.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

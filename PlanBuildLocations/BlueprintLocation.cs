@@ -1,13 +1,14 @@
-﻿using Jotunn.Managers;
+﻿using Jotunn.Configs;
+using Jotunn.Managers;
+using PlanBuild.Blueprints;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using Jotunn.Configs;
 using UnityEngine;
 using Logger = Jotunn.Logger;
 using Object = UnityEngine.Object;
-using System.Globalization;
 
 namespace PlanBuildLocations
 {
@@ -16,8 +17,10 @@ namespace PlanBuildLocations
         private const string HeaderName = "#Name:";
         private const string HeaderCreator = "#Creator:";
         private const string HeaderDescription = "#Description:";
-        private const string HeaderPieces = "#Pieces";
+        private const string HeaderSnapPoints = "#SnapPoints";
+        private const string HeaderTerrain = "#Terrain";
         private const string HeaderLocation = "#Location";
+        private const string HeaderPieces = "#Pieces";
 
         public enum Format
         {
@@ -26,6 +29,8 @@ namespace PlanBuildLocations
 
         private enum ParserState
         {
+            SnapPoints,
+            Terrain,
             Location,
             Pieces
         }
@@ -56,10 +61,20 @@ namespace PlanBuildLocations
         public PieceEntry[] PieceEntries;
 
         /// <summary>
+        ///     Array of the <see cref="SnapPointEntry"/>s of this blueprint
+        /// </summary>
+        public SnapPointEntry[] SnapPoints;
+
+        /// <summary>
+        ///     Array of the <see cref="TerrainModEntry"/>s of this blueprint
+        /// </summary>
+        public TerrainModEntry[] TerrainMods;
+
+        /// <summary>
         ///     Location configuration used by Jötunn
         /// </summary>
         public LocationConfig LocationConfig;
-        
+
         /// <summary>
         ///     Create a blueprint instance from a file in the filesystem. Reads VBuild and Blueprint files.
         ///     Reads an optional thumbnail from a PNG file with the same name as the blueprint.
@@ -139,6 +154,8 @@ namespace PlanBuildLocations
             ret.ID = id;
 
             List<PieceEntry> pieceEntries = new List<PieceEntry>();
+            List<SnapPointEntry> snapPoints = new List<SnapPointEntry>();
+            List<TerrainModEntry> terrainMods = new List<TerrainModEntry>();
             ret.LocationConfig = new LocationConfig();
 
             ParserState state = ParserState.Pieces;
@@ -168,14 +185,24 @@ namespace PlanBuildLocations
                     }
                     continue;
                 }
-                if (line == HeaderPieces)
+                if (line == HeaderSnapPoints)
                 {
-                    state = ParserState.Pieces;
+                    state = ParserState.SnapPoints;
+                    continue;
+                }
+                if (line == HeaderTerrain)
+                {
+                    state = ParserState.Terrain;
                     continue;
                 }
                 if (line == HeaderLocation)
                 {
                     state = ParserState.Location;
+                    continue;
+                }
+                if (line == HeaderPieces)
+                {
+                    state = ParserState.Pieces;
                     continue;
                 }
                 if (line.StartsWith("#"))
@@ -184,13 +211,11 @@ namespace PlanBuildLocations
                 }
                 switch (state)
                 {
-                    case ParserState.Pieces:
-                        switch (format)
-                        {
-                            case Format.BlueprintLocation:
-                                pieceEntries.Add(PieceEntry.FromBlueprint(line));
-                                break;
-                        }
+                    case ParserState.SnapPoints:
+                        snapPoints.Add(new SnapPointEntry(line));
+                        continue;
+                    case ParserState.Terrain:
+                        terrainMods.Add(new TerrainModEntry(line));
                         continue;
                     case ParserState.Location:
                         var split = line.Split(':');
@@ -266,6 +291,14 @@ namespace PlanBuildLocations
                                 break;
                         }
                         continue;
+                    case ParserState.Pieces:
+                        switch (format)
+                        {
+                            case Format.BlueprintLocation:
+                                pieceEntries.Add(PieceEntry.FromBlueprint(line));
+                                break;
+                        }
+                        continue;
                 }
             }
 
@@ -274,6 +307,8 @@ namespace PlanBuildLocations
                 ret.Name = ret.ID;
             }
 
+            ret.SnapPoints = snapPoints.ToArray();
+            ret.TerrainMods = terrainMods.ToArray();
             ret.PieceEntries = pieceEntries.ToArray();
 
             return ret;
@@ -295,6 +330,22 @@ namespace PlanBuildLocations
             ret.Add(HeaderName + Name);
             ret.Add(HeaderCreator + Creator);
             ret.Add(HeaderDescription + SimpleJson.SimpleJson.SerializeObject(Description));
+            if (SnapPoints.Any())
+            {
+                ret.Add(HeaderSnapPoints);
+                foreach (SnapPointEntry snapPoint in SnapPoints)
+                {
+                    ret.Add(snapPoint.line);
+                }
+            }
+            if (TerrainMods.Any())
+            {
+                ret.Add(HeaderTerrain);
+                foreach (TerrainModEntry terrainMod in TerrainMods)
+                {
+                    ret.Add(terrainMod.line);
+                }
+            }
             ret.Add(HeaderPieces);
             foreach (var piece in PieceEntries)
             {
@@ -354,13 +405,61 @@ namespace PlanBuildLocations
             // Create location pieces
             try
             {
-                var pieces = new List<PieceEntry>(PieceEntries);
-                var tf = location.transform;
+                Transform tf = location.transform;
 
-                var prefabs = new Dictionary<string, GameObject>();
+                foreach (SnapPointEntry snapPoint in SnapPoints)
+                {
+                    GameObject snapPointObject = new GameObject
+                    {
+                        name = "_snappoint",
+                        layer = LayerMask.NameToLayer("piece"),
+                        tag = "snappoint"
+                    };
+                    snapPointObject.SetActive(false);
+                    Object.Instantiate(snapPointObject, snapPoint.GetPosition(), Quaternion.identity, tf);
+                }
+
+                foreach (TerrainModEntry terrainMod in TerrainMods)
+                {
+                    GameObject terrainModObject = new GameObject
+                    {
+                        name = "TerrainMod",
+                        layer = LayerMask.NameToLayer("piece")
+                    };
+                    TerrainModifier terrainModComponent = terrainModObject.AddComponent<TerrainModifier>();
+                    if (terrainMod.shape.Equals("circle", StringComparison.OrdinalIgnoreCase))
+                    {
+                        terrainModComponent.m_square = false;
+                    }
+                    if (terrainMod.shape.Equals("square", StringComparison.OrdinalIgnoreCase))
+                    {
+                        terrainModComponent.m_square = true;
+                    }
+                    terrainModComponent.m_playerModifiction = false;
+                    terrainModComponent.m_level = true;
+                    terrainModComponent.m_levelRadius = terrainMod.radius;
+                    if (terrainMod.smooth != 0)
+                    {
+                        terrainModComponent.m_smooth = true;
+                        terrainModComponent.m_smoothRadius = terrainMod.radius;
+                        terrainModComponent.m_smoothPower = terrainMod.smooth;
+                    }
+                    terrainModComponent.m_paintCleared = false;
+                    if (!string.IsNullOrEmpty(terrainMod.paint))
+                    {
+                        terrainModComponent.m_paintCleared = true;
+                        terrainModComponent.m_paintType =
+                            (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), terrainMod.paint);
+                        terrainModComponent.m_paintRadius = terrainMod.radius;
+                    }
+                    Object.Instantiate(terrainModObject, terrainMod.GetPosition(), Quaternion.identity, tf);
+                }
+
+                List<PieceEntry> pieces = new List<PieceEntry>(PieceEntries);
+                Dictionary<string, GameObject> prefabs = new Dictionary<string, GameObject>();
                 foreach (var pieceEntry in pieces.GroupBy(x => x.name).Select(x => x.FirstOrDefault()))
                 {
-                    var go = PrefabManager.Instance.GetPrefab(pieceEntry.name);
+                    GameObject go = PrefabManager.Instance.GetPrefab(pieceEntry.name);
                     if (!go)
                     {
                         Logger.LogWarning($"No prefab found for {pieceEntry.name}! You are probably missing a dependency for blueprint {Name}");
@@ -374,9 +473,9 @@ namespace PlanBuildLocations
                     PieceEntry pieceEntry = pieces[i];
                     try
                     {
-                        var piecePosition = tf.position + pieceEntry.GetPosition();
-                        var pieceRotation = tf.rotation * pieceEntry.GetRotation();
-                        var pieceScale = pieceEntry.GetScale();
+                        Vector3 piecePosition = tf.position + pieceEntry.GetPosition();
+                        Quaternion pieceRotation = tf.rotation * pieceEntry.GetRotation();
+                        Vector3 pieceScale = pieceEntry.GetScale();
 
                         if (prefabs.TryGetValue(pieceEntry.name, out var prefab))
                         {
