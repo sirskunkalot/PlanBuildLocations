@@ -441,8 +441,7 @@ namespace PlanBuildLocations
                     if (terrainMod.smooth != 0)
                     {
                         terrainModComponent.m_smooth = true;
-                        terrainModComponent.m_smoothRadius = terrainMod.radius;
-                        terrainModComponent.m_smoothPower = terrainMod.smooth;
+                        terrainModComponent.m_smoothRadius = terrainMod.radius + 2f;
                     }
                     terrainModComponent.m_paintCleared = false;
                     if (!string.IsNullOrEmpty(terrainMod.paint))
@@ -452,7 +451,7 @@ namespace PlanBuildLocations
                             (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), terrainMod.paint);
                         terrainModComponent.m_paintRadius = terrainMod.radius;
                     }
-                    Object.Instantiate(terrainModObject, terrainMod.GetPosition(), Quaternion.identity, tf);
+                    Object.Instantiate(terrainModObject, terrainMod.GetPosition(), terrainMod.GetRotation(), tf);
                 }
 
                 List<PieceEntry> pieces = new List<PieceEntry>(PieceEntries);
