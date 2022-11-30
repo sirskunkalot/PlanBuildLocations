@@ -48,7 +48,7 @@ namespace PlanBuildLocations
             LocationsRPC = NetworkManager.Instance.AddRPC(
                 "bplocations", null, ReceiveLocationsZPackage);
 
-            SynchronizationManager.Instance.AddInitalSynchronization(LocationsRPC, CreateLocationsZPackage);
+            SynchronizationManager.Instance.AddInitialSynchronization(LocationsRPC, CreateLocationsZPackage);
 
             // Harmony patch to unload all locations from Jötunn on ZNetScene.Shutdown
             Harmony = new Harmony(PluginGUID);
