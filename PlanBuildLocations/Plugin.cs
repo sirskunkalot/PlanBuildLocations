@@ -20,7 +20,7 @@ namespace PlanBuildLocations
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency(Jotunn.Main.ModGuid, "2.10.0")]
-    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+    [NetworkCompatibility(CompatibilityLevel.ClientMustHaveMod, VersionStrictness.Minor)]
     internal class Plugin : BaseUnityPlugin
     {
         public const string PluginGUID = "marcopogo.PlanBuildLocations";
