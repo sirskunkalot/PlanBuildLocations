@@ -19,7 +19,7 @@ using Paths = BepInEx.Paths;
 namespace PlanBuildLocations
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
-    [BepInDependency(Jotunn.Main.ModGuid)]
+    [BepInDependency(Jotunn.Main.ModGuid, "2.10.0")]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     internal class Plugin : BaseUnityPlugin
     {
