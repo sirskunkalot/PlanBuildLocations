@@ -4,7 +4,7 @@
   "version_number": "0.0.1",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.1901",
-    "ValheimModding-Jotunn-2.7.7"
+    "ValheimModding-Jotunn-2.10.0"
   ],
   "website_url": "https://github.com/sirskunkalot/PlanBuildLocations"
 }

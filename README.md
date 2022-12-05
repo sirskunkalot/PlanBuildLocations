@@ -23,6 +23,8 @@ ExteriorRadius:7
 ClearArea:true
 ```
 
+Now create a new world in Valheim with the same name as the folder you created and it will load and place your blueprints in randomly on the map as per the location properties.
+
 ## Installing
 
 It is recommended to use a mod manager to install PlanBuildLocations and all of its dependencies.
