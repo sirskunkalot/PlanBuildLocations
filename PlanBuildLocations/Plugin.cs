@@ -8,19 +8,20 @@ using BepInEx;
 using HarmonyLib;
 using Jotunn.Entities;
 using Jotunn.Managers;
-using Jotunn.Utils;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEngine;
+using static ZoneSystem;
 using Paths = BepInEx.Paths;
 
 namespace PlanBuildLocations
 {
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
     [BepInDependency(Jotunn.Main.ModGuid, "2.10.0")]
-    [NetworkCompatibility(CompatibilityLevel.ClientMustHaveMod, VersionStrictness.Minor)]
+    //[NetworkCompatibility(CompatibilityLevel.ClientMustHaveMod, VersionStrictness.Minor)]
     internal class Plugin : BaseUnityPlugin
     {
         public const string PluginGUID = "marcopogo.PlanBuildLocations";
@@ -59,6 +60,62 @@ namespace PlanBuildLocations
         {
             [HarmonyPatch(typeof(ZNetScene), nameof(ZNetScene.Shutdown)), HarmonyPostfix]
             private static void ZNetScene_Shutdown() => Instance.RemoveCustomLocations();
+
+            [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.CreateLocationProxy)), HarmonyPrefix]
+            private static bool ZoneSystem_CreateLocationProxy(ZoneLocation location)
+                => Instance.PreventProxy(location);
+
+            [HarmonyPatch(typeof(ZoneSystem), nameof(ZoneSystem.SpawnLocation)), HarmonyPostfix]
+            private static void ZoneSystem_SpawnLocation(ZoneLocation location, Vector3 pos, Quaternion rot, SpawnMode mode)
+                => Instance.ApplyTerrainModifier(location, pos, rot, mode);
+        }
+
+        private bool PreventProxy(ZoneLocation location)
+        {
+            if (LocationBlueprints.ContainsKey(location.m_prefabName))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ApplyTerrainModifier(ZoneLocation location, Vector3 pos, Quaternion rot, SpawnMode mode)
+        {
+            if (mode == SpawnMode.Client)
+            {
+                return;
+            }
+
+            if (!LocationBlueprints.TryGetValue(location.m_prefabName, out var blueprint))
+            {
+                return;
+            }
+
+            foreach (TerrainModEntry mod in blueprint.TerrainMods)
+            {
+                Dictionary<TerrainComp, Indices> indices = new Dictionary<TerrainComp, Indices>();
+                Vector3 finalPostition = pos + rot * mod.GetPosition();
+                Quaternion finalRotation = rot * mod.GetRotation();
+
+                if (mod.shape.Equals("circle", StringComparison.OrdinalIgnoreCase))
+                {
+                    indices = TerrainTools.GetCompilerIndicesWithCircle(finalPostition, mod.radius * 2,
+                        BlockCheck.Off);
+                }
+                if (mod.shape.Equals("square", StringComparison.OrdinalIgnoreCase))
+                {
+                    indices = TerrainTools.GetCompilerIndicesWithRect(finalPostition, mod.radius * 2,
+                        mod.radius * 2,
+                        finalRotation.eulerAngles.y * Mathf.PI / 180f, BlockCheck.Off);
+                }
+                TerrainTools.LevelTerrain(indices, finalPostition, mod.radius, mod.smooth, finalPostition.y);
+                if (!string.IsNullOrEmpty(mod.paint))
+                {
+                    TerrainTools.PaintTerrain(indices, finalPostition, mod.radius,
+                        (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), mod.paint));
+                }
+            }
         }
 
         /// <summary>
@@ -117,10 +174,16 @@ namespace PlanBuildLocations
                 // Create blueprint locations
                 foreach (var bp in LocationBlueprints.Values)
                 {
-                    var prefab = bp.CreateLocation();
-                    var config = bp.LocationConfig;
-                    var location = new CustomLocation(prefab, false, config);
-                    ZoneManager.Instance.AddCustomLocation(location);
+                    try
+                    {
+                        bp.CreateLocation();
+                        var location = new CustomLocation(bp.LocationPrefab, false, bp.LocationConfig);
+                        ZoneManager.Instance.AddCustomLocation(location);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning($"Error caught while instantiating location {bp.ID}: {ex}");
+                    }
                 }
 
             }
@@ -166,9 +229,8 @@ namespace PlanBuildLocations
             // Create blueprint locations
             foreach (var bp in LocationBlueprints.Values)
             {
-                var prefab = bp.CreateLocation();
-                var config = bp.LocationConfig;
-                var location = new CustomLocation(prefab, false, config);
+                bp.CreateLocation();
+                var location = new CustomLocation(bp.LocationPrefab, false, bp.LocationConfig);
                 ZoneManager.Instance.AddCustomLocation(location);
                 ZoneManager.Instance.RegisterLocationInZoneSystem(location.ZoneLocation);
             }

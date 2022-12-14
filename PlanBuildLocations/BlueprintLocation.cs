@@ -69,6 +69,11 @@ namespace PlanBuildLocations
         ///     Array of the <see cref="TerrainModEntry"/>s of this blueprint
         /// </summary>
         public TerrainModEntry[] TerrainMods;
+        
+        /// <summary>
+        ///     Location configuration used by Jötunn
+        /// </summary>
+        public GameObject LocationPrefab;
 
         /// <summary>
         ///     Location configuration used by Jötunn
@@ -395,105 +400,98 @@ namespace PlanBuildLocations
         ///     Creates a location container of this blueprint. Can be used to add custom locations using Jötunn.
         /// </summary>
         /// <returns>Prefab that can be fed into the Jötunn ZoneManager</returns>
-        public GameObject CreateLocation()
+        public void CreateLocation()
         {
+            if (LocationPrefab)
+            {
+                return;
+            }
+
             Logger.LogDebug($"Creating location of blueprint {ID}");
 
             // Create location container
-            var location = ZoneManager.Instance.CreateLocationContainer(ID);
+            LocationPrefab = ZoneManager.Instance.CreateLocationContainer(ID);
 
             // Create location pieces
-            try
+            Transform tf = LocationPrefab.transform;
+
+            foreach (SnapPointEntry snapPoint in SnapPoints)
             {
-                Transform tf = location.transform;
-
-                foreach (SnapPointEntry snapPoint in SnapPoints)
+                GameObject snapPointObject = new GameObject
                 {
-                    GameObject snapPointObject = new GameObject
-                    {
-                        name = "_snappoint",
-                        layer = LayerMask.NameToLayer("piece"),
-                        tag = "snappoint"
-                    };
-                    snapPointObject.SetActive(false);
-                    Object.Instantiate(snapPointObject, snapPoint.GetPosition(), Quaternion.identity, tf);
-                }
-
-                foreach (TerrainModEntry terrainMod in TerrainMods)
-                {
-                    GameObject terrainModObject = new GameObject
-                    {
-                        name = "TerrainMod",
-                        layer = LayerMask.NameToLayer("piece")
-                    };
-                    TerrainModifier terrainModComponent = terrainModObject.AddComponent<TerrainModifier>();
-                    if (terrainMod.shape.Equals("circle", StringComparison.OrdinalIgnoreCase))
-                    {
-                        terrainModComponent.m_square = false;
-                    }
-                    if (terrainMod.shape.Equals("square", StringComparison.OrdinalIgnoreCase))
-                    {
-                        terrainModComponent.m_square = true;
-                    }
-                    terrainModComponent.m_playerModifiction = false;
-                    terrainModComponent.m_level = true;
-                    terrainModComponent.m_levelRadius = terrainMod.radius;
-                    if (terrainMod.smooth != 0)
-                    {
-                        terrainModComponent.m_smooth = true;
-                        terrainModComponent.m_smoothRadius = terrainMod.radius + 2f;
-                    }
-                    terrainModComponent.m_paintCleared = false;
-                    if (!string.IsNullOrEmpty(terrainMod.paint))
-                    {
-                        terrainModComponent.m_paintCleared = true;
-                        terrainModComponent.m_paintType =
-                            (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), terrainMod.paint);
-                        terrainModComponent.m_paintRadius = terrainMod.radius;
-                    }
-                    Object.Instantiate(terrainModObject, terrainMod.GetPosition(), terrainMod.GetRotation(), tf);
-                }
-
-                List<PieceEntry> pieces = new List<PieceEntry>(PieceEntries);
-                Dictionary<string, GameObject> prefabs = new Dictionary<string, GameObject>();
-                foreach (var pieceEntry in pieces.GroupBy(x => x.name).Select(x => x.FirstOrDefault()))
-                {
-                    GameObject go = PrefabManager.Instance.GetPrefab(pieceEntry.name);
-                    if (!go)
-                    {
-                        Logger.LogWarning($"No prefab found for {pieceEntry.name}! You are probably missing a dependency for blueprint {Name}");
-                        continue;
-                    }
-                    prefabs.Add(pieceEntry.name, go);
-                }
-
-                for (int i = 0; i < pieces.Count; i++)
-                {
-                    PieceEntry pieceEntry = pieces[i];
-                    try
-                    {
-                        Vector3 piecePosition = tf.position + pieceEntry.GetPosition();
-                        Quaternion pieceRotation = tf.rotation * pieceEntry.GetRotation();
-                        Vector3 pieceScale = pieceEntry.GetScale();
-
-                        if (prefabs.TryGetValue(pieceEntry.name, out var prefab))
-                        {
-                            var child = Object.Instantiate(prefab, piecePosition, pieceRotation, tf);
-                            child.transform.localScale = pieceScale;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.LogWarning($"Error while creating location piece of line: {pieceEntry.line}\n{e}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning($"Error caught while instantiating location {Name}: {ex}");
+                    name = "_snappoint",
+                    layer = LayerMask.NameToLayer("piece"),
+                    tag = "snappoint"
+                };
+                snapPointObject.SetActive(false);
+                Object.Instantiate(snapPointObject, snapPoint.GetPosition(), Quaternion.identity, tf);
             }
 
-            return location;
+            foreach (TerrainModEntry terrainMod in TerrainMods)
+            {
+                GameObject terrainModObject = new GameObject
+                {
+                    name = "TerrainMod",
+                    layer = LayerMask.NameToLayer("piece")
+                };
+                TerrainModifier terrainModComponent = terrainModObject.AddComponent<TerrainModifier>();
+                if (terrainMod.shape.Equals("circle", StringComparison.OrdinalIgnoreCase))
+                {
+                    terrainModComponent.m_square = false;
+                }
+                if (terrainMod.shape.Equals("square", StringComparison.OrdinalIgnoreCase))
+                {
+                    terrainModComponent.m_square = true;
+                }
+                terrainModComponent.m_playerModifiction = false;
+                terrainModComponent.m_level = true;
+                terrainModComponent.m_levelRadius = terrainMod.radius;
+                if (terrainMod.smooth != 0)
+                {
+                    terrainModComponent.m_smooth = true;
+                    terrainModComponent.m_smoothRadius = terrainMod.radius + 2f;
+                    terrainModComponent.m_smoothPower = terrainMod.smooth;
+                }
+                terrainModComponent.m_paintCleared = false;
+                if (!string.IsNullOrEmpty(terrainMod.paint))
+                {
+                    terrainModComponent.m_paintCleared = true;
+                    terrainModComponent.m_paintType =
+                        (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), terrainMod.paint);
+                    terrainModComponent.m_paintRadius = terrainMod.radius;
+                }
+                Object.Instantiate(terrainModObject, terrainMod.GetPosition(), terrainMod.GetRotation(), tf);
+            }
+
+            List<PieceEntry> pieces = new List<PieceEntry>(PieceEntries);
+            Dictionary<string, GameObject> prefabs = new Dictionary<string, GameObject>();
+            foreach (var pieceEntry in pieces.GroupBy(x => x.name).Select(x => x.FirstOrDefault()))
+            {
+                GameObject go = PrefabManager.Instance.GetPrefab(pieceEntry.name);
+                if (!go)
+                {
+                    Logger.LogWarning($"No prefab found for {pieceEntry.name}! You are probably missing a dependency for blueprint {Name}");
+                    continue;
+                }
+                prefabs.Add(pieceEntry.name, go);
+            }
+
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                PieceEntry pieceEntry = pieces[i];
+                try
+                {
+                    if (prefabs.TryGetValue(pieceEntry.name, out var prefab))
+                    {
+                        var child = Object.Instantiate(prefab, pieceEntry.GetPosition(), pieceEntry.GetRotation(), tf);
+                        child.transform.localScale = pieceEntry.GetScale();
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogWarning($"Error while creating location piece of line: {pieceEntry.line}\n{e}");
+                }
+            }
         }
     }
 }
