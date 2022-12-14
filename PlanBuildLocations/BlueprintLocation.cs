@@ -426,43 +426,7 @@ namespace PlanBuildLocations
                 snapPointObject.SetActive(false);
                 Object.Instantiate(snapPointObject, snapPoint.GetPosition(), Quaternion.identity, tf);
             }
-
-            foreach (TerrainModEntry terrainMod in TerrainMods)
-            {
-                GameObject terrainModObject = new GameObject
-                {
-                    name = "TerrainMod",
-                    layer = LayerMask.NameToLayer("piece")
-                };
-                TerrainModifier terrainModComponent = terrainModObject.AddComponent<TerrainModifier>();
-                if (terrainMod.shape.Equals("circle", StringComparison.OrdinalIgnoreCase))
-                {
-                    terrainModComponent.m_square = false;
-                }
-                if (terrainMod.shape.Equals("square", StringComparison.OrdinalIgnoreCase))
-                {
-                    terrainModComponent.m_square = true;
-                }
-                terrainModComponent.m_playerModifiction = false;
-                terrainModComponent.m_level = true;
-                terrainModComponent.m_levelRadius = terrainMod.radius;
-                if (terrainMod.smooth != 0)
-                {
-                    terrainModComponent.m_smooth = true;
-                    terrainModComponent.m_smoothRadius = terrainMod.radius + 2f;
-                    terrainModComponent.m_smoothPower = terrainMod.smooth;
-                }
-                terrainModComponent.m_paintCleared = false;
-                if (!string.IsNullOrEmpty(terrainMod.paint))
-                {
-                    terrainModComponent.m_paintCleared = true;
-                    terrainModComponent.m_paintType =
-                        (TerrainModifier.PaintType)Enum.Parse(typeof(TerrainModifier.PaintType), terrainMod.paint);
-                    terrainModComponent.m_paintRadius = terrainMod.radius;
-                }
-                Object.Instantiate(terrainModObject, terrainMod.GetPosition(), terrainMod.GetRotation(), tf);
-            }
-
+            
             List<PieceEntry> pieces = new List<PieceEntry>(PieceEntries);
             Dictionary<string, GameObject> prefabs = new Dictionary<string, GameObject>();
             foreach (var pieceEntry in pieces.GroupBy(x => x.name).Select(x => x.FirstOrDefault()))
