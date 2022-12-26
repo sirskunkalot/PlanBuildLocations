@@ -109,6 +109,7 @@ namespace PlanBuildLocations
                         mod.radius * 2,
                         finalRotation.eulerAngles.y * Mathf.PI / 180f, BlockCheck.Off);
                 }
+                TerrainTools.ResetTerrain(indices, finalPostition, mod.radius);
                 TerrainTools.LevelTerrain(indices, finalPostition, mod.radius, mod.smooth, finalPostition.y);
                 if (!string.IsNullOrEmpty(mod.paint))
                 {

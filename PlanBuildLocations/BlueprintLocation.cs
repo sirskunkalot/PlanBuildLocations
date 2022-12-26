@@ -399,7 +399,6 @@ namespace PlanBuildLocations
         /// <summary>
         ///     Creates a location container of this blueprint. Can be used to add custom locations using Jötunn.
         /// </summary>
-        /// <returns>Prefab that can be fed into the Jötunn ZoneManager</returns>
         public void CreateLocation()
         {
             if (LocationPrefab)

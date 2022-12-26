@@ -1,8 +1,7 @@
-﻿using System;
+﻿using Jotunn.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Jotunn.Managers;
-using Jotunn.Utils;
 using UnityEngine;
 
 namespace PlanBuildLocations
@@ -61,11 +60,13 @@ namespace PlanBuildLocations
         {
             List<Heightmap> heightMaps = new List<Heightmap>();
             Heightmap.FindHeightmap(position, radius + 1f, heightMaps);
+            //Heightmap.FindHeightmap(position, radius + 4f, heightMaps);
             var pos = position;
             var zs = ZoneSystem.instance;
             var ns = ZNetScene.instance;
             return heightMaps.Where(hmap => ns.InActiveArea(zs.GetZone(hmap.transform.position), pos))
                 .Select(hmap => hmap.GetAndCreateTerrainCompiler());
+            //return heightMaps.Select(hmap => hmap.GetAndCreateTerrainCompiler());
         }
 
         private static IEnumerable<TerrainComp> GetTerrainCompilersWithRect(Vector3 position, float width, float depth,
@@ -78,11 +79,13 @@ namespace PlanBuildLocations
             var dimensionMultiplier = Mathf.Abs(Mathf.Sin(angle)) + Mathf.Abs(Mathf.Cos(angle));
             var size = maxDimension * dimensionMultiplier / 2f;
             Heightmap.FindHeightmap(position, size + 1f, heightMaps);
+            //Heightmap.FindHeightmap(position, size + 4f, heightMaps);
             var pos = position;
             var zs = ZoneSystem.instance;
             var ns = ZNetScene.instance;
             return heightMaps.Where(hmap => ns.InActiveArea(zs.GetZone(hmap.transform.position), pos))
                 .Select(hmap => hmap.GetAndCreateTerrainCompiler());
+            //return heightMaps.Select(hmap => hmap.GetAndCreateTerrainCompiler());
         }
 
         public static Dictionary<TerrainComp, Indices> GetCompilerIndicesWithCircle(Vector3 centerPos, float diameter,
@@ -205,7 +208,7 @@ namespace PlanBuildLocations
             DoHeightOperation(compilerIndices, pos, radius, action);
             PaintTerrain(compilerIndices, pos, radius, Color.black);
         }
-        
+
         public static void PaintTerrain(Dictionary<TerrainComp, Indices> compilerIndices, Vector3 pos, float radius, TerrainModifier.PaintType type)
         {
             Color color = type switch
@@ -252,7 +255,7 @@ namespace PlanBuildLocations
                 };
             });
         }
-        
+
         private static Vector3 VertexToWorld(Heightmap hmap, int x, int y)
         {
             var vector = hmap.transform.position;
@@ -264,7 +267,7 @@ namespace PlanBuildLocations
         private static void DoHeightOperation(Dictionary<TerrainComp, Indices> compilerIndices, Vector3 pos, float radius,
             Action<TerrainComp, HeightIndex> action)
         {
-            var before = GetData(compilerIndices);
+            //var before = GetData(compilerIndices);
             foreach (var kvp in compilerIndices)
             {
                 var compiler = kvp.Key;
@@ -273,15 +276,15 @@ namespace PlanBuildLocations
                 Save(compiler);
             }
             ClutterSystem.instance?.ResetGrass(pos, radius);
-            var after = GetData(compilerIndices);
-            var undo = new UndoActions.UndoTerrain(before, after, pos, radius);
+            //var after = GetData(compilerIndices);
+            //var undo = new UndoActions.UndoTerrain(before, after, pos, radius);
             //UndoManager.Instance.Add(Config.BlueprintUndoQueueNameConfig.Value, undo);
         }
 
         private static void DoPaintOperation(Dictionary<TerrainComp, Indices> compilerIndices, Vector3 pos, float radius,
             Action<TerrainComp, int> action)
         {
-            var before = GetData(compilerIndices);
+            //var before = GetData(compilerIndices);
             foreach (var kvp in compilerIndices)
             {
                 var compiler = kvp.Key;
@@ -290,8 +293,8 @@ namespace PlanBuildLocations
                 Save(compiler);
             }
             ClutterSystem.instance?.ResetGrass(pos, radius);
-            var after = GetData(compilerIndices);
-            var undo = new UndoActions.UndoTerrain(before, after, pos, radius);
+            //var after = GetData(compilerIndices);
+            //var undo = new UndoActions.UndoTerrain(before, after, pos, radius);
             //UndoManager.Instance.Add(Config.BlueprintUndoQueueNameConfig.Value, undo);
         }
 
